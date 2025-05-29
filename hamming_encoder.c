@@ -10,6 +10,47 @@ int is_parity_position(int pos) {
     return pos == 1 || pos == 2 || pos == 4 || pos == 8 || pos == 16;
 }
 
+
+
+void hamming_31_26_decode(uint32_t *code, uint32_t *data){
+    int s = 0;
+
+    uint32_t copy_code = (*code);
+
+    for (int i = 0; i < 5; i++)
+    {                     // vai até a potência de 2⁴ = 16!
+        int pi = 1 << i;  //1 2 4 8 16
+        int count = 0;
+
+        for (int j = pi; j < 32; j += 2 * pi)   //blocos de 2pi, pq alterna ligado a cada pi!
+            for (int k = j; k < j + pi && k < 32; k++)  //vai de j ate j + pi - 1 no bloco (todas as possibilidades com o bit de interesse ligado!)
+                count ^= (copy_code >> (k-1)) & 1u;   //paridade dos bits do bloco
+                                                    //xor com o bit na posicao de interesse!
+        if (count)  //se a qtd for impar
+            s |= pi;    //liga o bit correspondente ao bloco no laco!!!
+    }                   //com cada bloco correspondente ao valor binario, ao montar tudo, gera o indice especifico!
+
+    if (s != 0 && s < 32){
+        copy_code ^= 1u << (s - 1);   //corrige o erro na posicao de syndrome
+        printf("Erro corrigido, bit na posição %d\n", s);
+    }
+    else
+        printf("Nenhum erro ou erro excessivo detectado!\n");
+
+    uint32_t copy_data = 0;
+    int di = 0;
+    for (uint32_t pos = 1; pos < 32; pos++){    
+        if (pos & (pos - 1)){   //se nao for potencia de 2
+            uint32_t bit = (copy_code >> (pos - 1)) & 1u;   //operacao para isolar 1 bit
+            copy_data |= bit << di; //seta os bits da msg original 1 de cada vez
+            di++;   //atualiza o bit de referencia
+        }
+    }
+
+    (*code) = copy_code;
+    (*data) = copy_data;
+}
+
 uint32_t hamming_31_26_encode(uint32_t data) {
     int hamming[CODED_SIZE] = {0};
     int data_bit_index = 0;
@@ -117,6 +158,77 @@ void encode_file(const char *input_filename, const char *output_filename) {
     fclose(arq_entrada);
     fclose(arq_saida);
     printf("Codificação concluída com sucesso!\n");
+}
+
+void decode_file (const char *input_filename, const char *output_filename){
+    FILE *arq_entrada = fopen(input_filename, "rb");
+    if (!arq_entrada) {
+        perror("Erro ao abrir arquivo de entrada");
+        exit(1);
+    }
+
+    FILE *arq_saida = fopen(output_filename, "w");
+    if (!arq_saida) {
+        perror("Erro ao criar arquivo de saída");
+        fclose(arq_entrada);
+        exit(1);
+    }
+
+    uint8_t buffer[4];                                                                   // Buffer para armazenar os bytes lidos
+    size_t read;                                                                         // Número de bytes lidos    
+    uint32_t bit_buffer = 0;                                                             // Buffer para armazenar os bits lidos
+    int bit_count = 0;                                                                   // Contador de bits em bit_buffer
+
+    uint32_t data;
+
+    while ((read = fread(buffer, 1, sizeof(buffer), arq_entrada)) > 0) {                 // Lê até 4 bytes do arquivo
+        for (size_t i = 0; i < read; i++) {                                              
+            bit_buffer = (bit_buffer << 8) | buffer[i];                                  
+            bit_count += 8;                                                                                      
+
+            while (bit_count >= 31) {
+                uint32_t data31 = bit_buffer >> (bit_count - 31);                        
+
+                printf("bit_count antes do dencode: %d\n", bit_count);
+                printf("data31: ");
+                print_binary(data31, 31);
+                printf("\n");
+
+                hamming_31_26_decode(data31, data);                       
+
+                printf("decoded: ");
+                print_binary(data, 26);
+                printf("\n");
+
+
+                fprintf(arq_saida, "%u ", data);
+                bit_count -= 31;
+                bit_buffer &= (1 << bit_count) - 1;                                    
+            }
+        }
+    }
+
+    //VERIFICO SE SOBRA NESSE CASO?
+
+    // if (bit_count > 0) {
+    //     // Preenche os bits restantes à esquerda com zeros para formar 26 bits
+    //     uint32_t data26 = bit_buffer << (26 - bit_count);
+
+    //     printf("Final data26 (padded): ");
+    //     print_binary(data26, 26);
+    //     printf("\n");
+
+    //     uint32_t encoded = hamming_31_26_encode(data26);
+    //     fprintf(arq_saida, "%u ", encoded);
+
+    //     printf("Final encoded: ");
+    //     print_binary(encoded, 31);
+    //     printf("\n");
+    // }
+
+    fclose(arq_entrada);
+    fclose(arq_saida);
+    printf("Decodificação concluída com sucesso!\n");
 }
 
 int main(int argc, char *argv[]) {
