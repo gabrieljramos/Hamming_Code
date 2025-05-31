@@ -1,9 +1,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <string.h>
 
 #define BLOCK_SIZE 26
 #define CODED_SIZE 31
+
 
 
 int is_parity_position(int pos) {
@@ -86,10 +88,33 @@ uint32_t hamming_31_26_encode(uint32_t data) {
 
     return encoded;
 }
+
 void print_binary(uint32_t value, int bits) {
     for (int i = bits - 1; i >= 0; i--) {
         printf("%d", (value >> i) & 1);
     }
+}
+
+void print_encoded_file(const char *filename) {
+    FILE *file = fopen(filename, "rb");
+    if (!file) {
+        perror("Erro ao abrir arquivo codificado");
+        exit(1);
+    }
+
+    uint32_t value;
+    int count = 0;
+
+    printf("Conteúdo do arquivo codificado:\n");
+
+    while (fread(&value, sizeof(uint32_t), 1, file) == 1) {
+        printf("[%d] Decimal: %u | Binário: ", count, value);
+        print_binary(value, 31);
+        printf("\n");
+        count++;
+    }
+
+    fclose(file);
 }
 // Lê bytes do arquivo, agrupa em blocos de 26 bits, codifica e grava no novo arquivo
 void encode_file(const char *input_filename, const char *output_filename) {
@@ -100,7 +125,7 @@ void encode_file(const char *input_filename, const char *output_filename) {
         exit(1);
     }
 
-    FILE *arq_saida = fopen(output_filename, "w");
+    FILE *arq_saida = fopen(output_filename, "wb");
     if (!arq_saida) {
         perror("Erro ao criar arquivo de saída");
         fclose(arq_entrada);
@@ -132,7 +157,7 @@ void encode_file(const char *input_filename, const char *output_filename) {
                 printf("\n");
 
 
-                fprintf(arq_saida, "%u ", encoded);
+                fwrite(&encoded, sizeof(uint32_t), 1, arq_saida);
                 bit_count -= 26;
                 bit_buffer &= (1 << bit_count) - 1;                                      // Limpa os bits processados   
             }
@@ -148,7 +173,7 @@ void encode_file(const char *input_filename, const char *output_filename) {
         printf("\n");
 
         uint32_t encoded = hamming_31_26_encode(data26);
-        fprintf(arq_saida, "%u ", encoded);
+        fwrite(&encoded, sizeof(uint32_t), 1, arq_saida);
 
         printf("Final encoded: ");
         print_binary(encoded, 31);
@@ -159,6 +184,7 @@ void encode_file(const char *input_filename, const char *output_filename) {
     fclose(arq_saida);
     printf("Codificação concluída com sucesso!\n");
 }
+
 
 void decode_file (const char *input_filename, const char *output_filename){
     FILE *arq_entrada = fopen(input_filename, "rb");
@@ -194,7 +220,7 @@ void decode_file (const char *input_filename, const char *output_filename){
                 print_binary(data31, 31);
                 printf("\n");
 
-                hamming_31_26_decode(data31, data);                       
+                hamming_31_26_decode(&data31, &data);                       
 
                 printf("decoded: ");
                 print_binary(data, 26);
@@ -232,12 +258,17 @@ void decode_file (const char *input_filename, const char *output_filename){
 }
 
 int main(int argc, char *argv[]) {
-    if (argc != 3) {
-        fprintf(stderr, "Uso: %s <arquivo_entrada> <arquivo_saida>\n", argv[0]);
+    if (argc != 4) {
+        fprintf(stderr, "Uso: %s <-e|-d> <arquivo_entrada> <arquivo_saida>\n", argv[0]);
         return 1;
     }
 
-    encode_file(argv[1], argv[2]);
+    if (strcmp(argv[1], "-e") == 0) {
+        encode_file(argv[2], argv[3]);
+        print_encoded_file(argv[3]);
+    } else if (strcmp(argv[1], "-d") == 0) {
+        decode_file(argv[2], argv[3]);
+    }
     return 0;
 }
 
