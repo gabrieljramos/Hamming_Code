@@ -26,14 +26,14 @@ void hamming_31_26_decode(uint32_t *code, uint32_t *data){
 
         for (int j = pi; j < 32; j += 2 * pi)   //blocos de 2pi, pq alterna ligado a cada pi!
             for (int k = j; k < j + pi && k < 32; k++)  //vai de j ate j + pi - 1 no bloco (todas as possibilidades com o bit de interesse ligado!)
-                count ^= (copy_code >> (k-1)) & 1u;   //paridade dos bits do bloco
+                count ^= (copy_code >> (31 - k)) & 1;   //paridade dos bits do bloco
                                                     //xor com o bit na posicao de interesse!
         if (count)  //se a qtd for impar
             s |= pi;    //liga o bit correspondente ao bloco no laco!!!
     }                   //com cada bloco correspondente ao valor binario, ao montar tudo, gera o indice especifico!
 
     if (s != 0 && s < 32){
-        copy_code ^= 1u << (s - 1);   //corrige o erro na posicao de syndrome
+        copy_code ^= 1u << (31 - s);   //corrige o erro na posicao de syndrome
         printf("Erro corrigido, bit na posição %d\n", s);
     }
     else
@@ -42,9 +42,9 @@ void hamming_31_26_decode(uint32_t *code, uint32_t *data){
     uint32_t copy_data = 0;
     int di = 0;
     for (uint32_t pos = 1; pos < 32; pos++){    
-        if (pos & (pos - 1)){   //se nao for potencia de 2
-            uint32_t bit = (copy_code >> (pos - 1)) & 1u;   //operacao para isolar 1 bit
-            copy_data |= bit << di; //seta os bits da msg original 1 de cada vez
+        if (!is_parity_position(pos)){   //se nao for potencia de 2
+            uint32_t bit = (copy_code >> (31 - pos)) & 1;   //operacao para isolar 1 bit
+            copy_data = (copy_data << 1) | bit; //seta os bits da msg original 1 de cada vez
             di++;   //atualiza o bit de referencia
         }
     }
@@ -156,7 +156,14 @@ void encode_file(const char *input_filename, const char *output_filename) {
                 print_binary(encoded, 31);
                 printf("\n");
 
+                uint32_t data = 0;
+                uint32_t copy = encoded;
+                hamming_31_26_decode(&encoded, &data);
+                printf("DECODIFICADO FICA:");
+                print_binary(data, 26);
+                printf("\n");
 
+                encoded = copy;
                 fwrite(&encoded, sizeof(uint32_t), 1, arq_saida);
                 bit_count -= 26;
                 bit_buffer &= (1 << bit_count) - 1;                                      // Limpa os bits processados   
