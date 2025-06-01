@@ -137,6 +137,11 @@ void encode_file(const char *input_filename, const char *output_filename) {
     uint32_t bit_buffer = 0;                                                             // Buffer para armazenar os bits lidos
     int bit_count = 0;                                                                   // Contador de bits em bit_buffer
 
+    fseek(arq_entrada, 0, SEEK_END);
+    uint32_t original_size = ftell(arq_entrada);
+    fseek(arq_entrada, 0, SEEK_SET);
+    fwrite(&original_size, sizeof(uint32_t), 1, arq_saida);
+
     while ((read = fread(buffer, 1, sizeof(buffer), arq_entrada)) > 0) {                 // Lê até 4 bytes do arquivo
         for (size_t i = 0; i < read; i++) {                                              // Para cada byte lido
             bit_buffer = (bit_buffer << 8) | buffer[i];                                  // Adiciona o byte ao buffer de bits
@@ -210,7 +215,11 @@ void decode_file(const char *input_filename, const char *output_filename) {
     uint32_t decoded_data;
     uint8_t output_byte = 0;
     int bit_count = 0;
-    int bits_written = 0;
+    //int bits_written = 0;
+
+    uint32_t original_size;
+    fread(&original_size, sizeof(uint32_t), 1, arq_entrada);
+    uint32_t bytes_written = 0;
 
     printf("Iniciando decodificação...\n");
 
@@ -237,27 +246,27 @@ void decode_file(const char *input_filename, const char *output_filename) {
             bit_count++;
             
             //escreve no arquivo quando fecha o byte
-            if (bit_count == 8) {
+            if (bit_count >= 8 && bytes_written < original_size) {
                 fwrite(&output_byte, 1, 1, arq_saida);
                 printf("Byte escrito: %u\n", output_byte);
                 output_byte = 0;
                 bit_count = 0;
-                bits_written++;
+                bytes_written++;
             }
         }
     }
 
     //tratamento do resto
-    if (bit_count > 0) {
+    if (bit_count > 0 && bytes_written < original_size) {
         output_byte <<= (8 - bit_count);
         fwrite(&output_byte, 1, 1, arq_saida);
         printf("Byte residual escrito: %u (com %d bits)\n", output_byte, bit_count);
-        bits_written++;
+        bytes_written++;
     }
 
     fclose(arq_entrada);
     fclose(arq_saida);
-    printf("Decodificação concluída com sucesso! %d bytes escritos.\n", bits_written);
+    printf("Decodificação concluída com sucesso! %d bytes escritos.\n", bytes_written);
 }
 
 int main(int argc, char *argv[]) {
@@ -274,4 +283,3 @@ int main(int argc, char *argv[]) {
     }
     return 0;
 }
-
