@@ -176,9 +176,9 @@ void encode_file(const char *input_filename, const char *output_filename) {
         }
     }
 
-    if (bit_count > 0) {
+    if (bit_count > 0) {                                                                 // Se ainda houver bits restantes no buffer
         // Preenche os bits restantes à esquerda com zeros para formar 26 bits
-        uint32_t data26 = bit_buffer << (26 - bit_count);
+        uint32_t data26 = bit_buffer << (26 - bit_count);                                // Desloca os bits restantes para a esquerda
 
         printf("Final data26 (padded): ");
         print_binary(data26, 26);
@@ -198,13 +198,14 @@ void encode_file(const char *input_filename, const char *output_filename) {
 }
 
 void decode_file(const char *input_filename, const char *output_filename) {
-    FILE *arq_entrada = fopen(input_filename, "rb");
+
+    FILE *arq_entrada = fopen(input_filename, "rb");                                     // Abre o arquivo de entrada para leitura
     if (!arq_entrada) {
         perror("Erro ao abrir arquivo de entrada");
         exit(1);
     }
 
-    FILE *arq_saida = fopen(output_filename, "wb");
+    FILE *arq_saida = fopen(output_filename, "wb");                                      // Abre o arquivo de saída para escrita
     if (!arq_saida) {
         perror("Erro ao criar arquivo de saída");
         fclose(arq_entrada);
@@ -215,39 +216,36 @@ void decode_file(const char *input_filename, const char *output_filename) {
     uint32_t decoded_data;
     uint8_t output_byte = 0;
     int bit_count = 0;
-    //int bits_written = 0;
 
     uint32_t original_size;
-    fread(&original_size, sizeof(uint32_t), 1, arq_entrada);
+    fread(&original_size, sizeof(uint32_t), 1, arq_entrada);                             // Lê o tamanho original do arquivo codificado
     uint32_t bytes_written = 0;
 
     printf("Iniciando decodificação...\n");
 
-    //processa cada bloco de 4 bytes (31 bits codificados)
-    while (fread(&encoded_block, sizeof(uint32_t), 1, arq_entrada) == 1) {
+    while (fread(&encoded_block, sizeof(uint32_t), 1, arq_entrada) == 1) {               // Lê blocos de 31 bits do arquivo codificado
         printf("Bloco lido: %u\n", encoded_block);
         printf("Binário do bloco: ");
         print_binary(encoded_block, 32); //o que recebe
         printf("\n");
 
-        //decodifica o bloco de 31 bits para 26 bits
-        hamming_31_26_decode(&encoded_block, &decoded_data);
+        hamming_31_26_decode(&encoded_block, &decoded_data);                             // Decodifica o bloco lido
         
         printf("Dados decodificados: ");
         print_binary(decoded_data, 26);
         printf("\n");
         
         //extrai os 26 bits decodificados
-        for (int i = 25; i >= 0; i--) {
-            uint8_t bit = (decoded_data >> i) & 1;
+        for (int i = 25; i >= 0; i--) {                                                  // Para cada bit dos 26 bits decodificados
+            uint8_t bit = (decoded_data >> i) & 1;                                       // Extrai o bit mais significativo
             
             //adiciona o bit ao byte de saída
-            output_byte = (output_byte << 1) | bit;
+            output_byte = (output_byte << 1) | bit;                                      // Desloca o byte de saída para a esquerda e adiciona o bit
             bit_count++;
             
             //escreve no arquivo quando fecha o byte
-            if (bit_count >= 8 && bytes_written < original_size) {
-                fwrite(&output_byte, 1, 1, arq_saida);
+            if (bit_count >= 8 && bytes_written < original_size) {                       // Se já tiver 8 bits ou mais e ainda não tiver escrito todos os bytes originais
+                fwrite(&output_byte, 1, 1, arq_saida);                                   // Escreve o byte de saída no arquivo
                 printf("Byte escrito: %u\n", output_byte);
                 output_byte = 0;
                 bit_count = 0;
@@ -257,7 +255,7 @@ void decode_file(const char *input_filename, const char *output_filename) {
     }
 
     //tratamento do resto
-    if (bit_count > 0 && bytes_written < original_size) {
+    if (bit_count > 0 && bytes_written < original_size) {                                // Se ainda houver bits restantes e não tiver escrito todos os bytes originais
         output_byte <<= (8 - bit_count);
         fwrite(&output_byte, 1, 1, arq_saida);
         printf("Byte residual escrito: %u (com %d bits)\n", output_byte, bit_count);
@@ -275,10 +273,10 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    if (strcmp(argv[1], "-e") == 0) {
+    if (strcmp(argv[1], "-e") == 0) {                                                    // Codificação
         encode_file(argv[2], argv[3]);
         print_encoded_file(argv[3]);
-    } else if (strcmp(argv[1], "-d") == 0) {
+    } else if (strcmp(argv[1], "-d") == 0) {                                             // Decodificação
         decode_file(argv[2], argv[3]);
     }
     return 0;
